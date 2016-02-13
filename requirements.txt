@@ -1,0 +1,9 @@
+# Primary requirements file.
+pyramid
+pyramid_chameleon
+pyramid_debugtoolbar
+waitress
+
+gunicorn
+
+pytoml
