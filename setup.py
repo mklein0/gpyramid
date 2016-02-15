@@ -53,6 +53,9 @@ setup(name='gpyramid',
       install_requires=requires,
       tests_require=requires,
       test_suite="gpyramid",
+      scripts=[
+        'gpyramid/scripts/gpyramid_wsgi',
+      ],
       entry_points={
         'paste.app_factory': [
             'main = gpyramid.main:main',

@@ -1,2 +1,3 @@
 include *.txt *.ini *.cfg *.rst *.md
+include gpyramid/scripts/gpyramid_wsgi
 recursive-include gpyramid *.ico *.png *.css *.gif *.jpg *.pt *.txt *.mak *.mako *.js *.html *.xml
