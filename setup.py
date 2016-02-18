@@ -12,7 +12,6 @@ def read_version(fobj):
         if matches:
             return matches.group(1)
 
-    raise NotImplementedError 
     # Else unknown version
     return 'unknown'
     
@@ -21,7 +20,7 @@ def read_version(fobj):
 HERE = os.path.abspath(os.path.dirname(__file__))
 
 with open(os.path.join(HERE, 'gpyramid', '__init__.py')) as f:
-    gpyramid_version = read_version(f)
+    module_version = read_version(f)
 
 with open(os.path.join(HERE, 'README.md')) as f:
     README = f.read()
@@ -34,7 +33,7 @@ with open(os.path.join(HERE, 'requirements.txt')) as f:
 
 
 setup(name='gpyramid',
-      version=gpyramid_version,
+      version=module_version,
       description='gpyramid',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
