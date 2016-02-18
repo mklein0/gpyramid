@@ -16,7 +16,7 @@
 <p>
 <form method="POST" ><table>
 	<tr><th>Client ID</th><td>${client.client_id}</td></tr>
-% for field in (form.client_secret, form.email, form.redirect_uri):
+% for field in (form.client_secret, form.name, form.client_type, form.email, form.redirect_uri, form.home_page):
 	<tr><th>${ field.label }</th><td>${ field() }<td></tr>
 	% if field.errors:
 	<tr><th></th><td>
@@ -28,12 +28,12 @@
 	</td></tr>
 	% endif
 % endfor
-	<tr><th></th><td><input type="submit" value="Add New Client" /></td></tr>
+	<tr><th></th><td><input type="submit" value="Edit Client" /></td></tr>
 </table></form>
 </p>
 <p>
 <ul>
-	<li><button id="delete_button">Delete User</button></li>
+	<li><button id="delete_button">Delete Client</button></li>
 </ul>
 </p>
 <script type="text/javascript">

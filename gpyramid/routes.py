@@ -9,6 +9,7 @@ def add_routes(config):
     config.add_route('home', '/')
 
     # Configuration End-Points
+    config.add_route('data.index', 'data/')
     config.add_route('data.user.list_or_create', 'data/users/')
     config.add_route('data.user.view_or_edit', 'data/users/{user_uuid:[0-9a-f\-]+}/')
     config.add_route('data.client.list_or_create', 'data/clients/')

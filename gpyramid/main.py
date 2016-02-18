@@ -1,4 +1,5 @@
-from pyramid.config import Configurator
+#
+from pyramid_configurator.toml import TomlConfigurator as Configurator
 
 
 def main(global_config, **settings):
@@ -7,6 +8,7 @@ def main(global_config, **settings):
     config = Configurator(settings=settings)
 
     config.include('pyramid_chameleon')
+    config.include('gpyramid.db.cassandra_')
     config.include('gpyramid.routes')
 
     config.scan()

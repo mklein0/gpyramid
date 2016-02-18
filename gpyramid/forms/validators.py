@@ -34,18 +34,20 @@ class NoWhiteSpace(wtvalidators.Regexp):
         super(NoWhiteSpace, self).__init__(r'^\S*', message=message)
 
 
-class InputRequiredIfXSet(wtvalidators.InputRequired):
+class IfXSetThenElse(object):
     """
-    This input is required if another field has data present.
+    Call given validator if another field has data present.
     """
-    def __init__(self, fieldname, message=None):
+    def __init__(self, fieldname, then_, else_=None):
         """
         :param str fieldname: Name of field in form we are dependent upon.
-        :param str message: Error message to display if field required and not present.
+        :param callable(wtforms.Form, wtforms.Field) then_: Validator to call on given field if value present in another field.
+        :param callable(wtforms.Form, wtforms.Field) else_: Validator to call on given field if value not present in another field.
         """
-        super(InputRequiredIfXSet, self).__init__(message=message)
-
         self.fieldname = fieldname
+
+        self.then_ = then_
+        self.else_ = else_
 
     def __call__(self, form, field):
         """
@@ -65,12 +67,10 @@ class InputRequiredIfXSet(wtvalidators.InputRequired):
                     "Field '{}' not present in form.".format(self.fieldname))
             )
 
-        try:
-            super(InputRequiredIfXSet, self).__call__(form, precond_field)
-            
-        except wtvalidation.ValidationError:
-            # No value present
-            return
+        # Test for existence of values in precondition field.
+        if not precond_field.raw_data or not precond_field.raw_data[0]:
+            if self.else_ is not None:
+                return self.else_(form, field)
 
-        # Required precondition field is present, check current field.
-        return super(InputRequiredIfXSet, self).__call__(form, field)
+        # Else, pre-condition field exists.
+        return self.then_(form, field)

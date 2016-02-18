@@ -7,6 +7,9 @@
 </style>
 </head>
 <body>
+<p>
+    <a href="..">Back to index</a>
+</p>
 <h1>List of OAuth2 Clients</h1>
 
 % if paginator.items:
@@ -42,7 +45,7 @@ ${paginator.pager() | n}
 <h1>Add Client</h1>
 <p/>
 <form method="POST" ><table>
-% for field in (form.client_id, form.client_secret, form.email, form.redirect_uri):
+% for field in (form.name, form.client_type, form.email, form.redirect_uri, form.home_page, form.client_id, form.client_secret,):
 	<tr><th>${ field.label }</th><td>${ field() }<td></tr>
 	% if field.errors:
 	<tr><th></th><td>

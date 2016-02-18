@@ -7,6 +7,9 @@
 </style>
 </head>
 <body>
+<p>
+    <a href="..">Back to index</a>
+</p>
 <h1>List of Users</h1>
 
 % if paginator.items:
@@ -43,7 +46,7 @@ ${paginator.pager() | n}
 <h1>Add User</h1>
 <p/>
 <form method="POST" ><table>
-% for field in (form.username, form.email, form.user_uuid):
+% for field in (form.username, form.password, form.confirm_password, form.first_name, form.last_name, form.email, form.user_uuid, form.display_name):
 	<tr><th>${ field.label }</th><td>${ field() }<td></tr>
 	% if field.errors:
 	<tr><th></th><td>
