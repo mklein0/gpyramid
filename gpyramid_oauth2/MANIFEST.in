@@ -1,0 +1,3 @@
+include *.txt *.ini *.cfg *.rst *.md
+include gpyramid_oauth2/scripts/gpyramid_oauth2_wsgi
+recursive-include gpyramid_oauth2 *.ico *.png *.css *.gif *.jpg *.pt *.txt *.mak *.mako *.js *.html *.xml

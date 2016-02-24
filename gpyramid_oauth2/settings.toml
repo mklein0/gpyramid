@@ -1,0 +1,27 @@
+# Settings file for pyramid application
+# vim: set ts=2 sts=2
+
+[cassandra]
+	session_type = "cqlengine"
+
+[cassandra.cluster.new.kwargs]
+	contact_points = [
+		"127.0.0.1"
+	]
+
+# Dislike this method of specifying options, but logging module does something similar
+[cassandra.cluster.new.kwargs_eval]
+	load_balancing_policy = "TokenAwarePolicy(DCAwareRoundRobinPolicy(local_dc='datacenter1'))"
+	default_retry_policy = "RetryPolicy()"
+
+[cassandra.cluster.connect.kwargs]
+	keyspace = "userdb"
+
+
+[cassandra.cqlengine.connection.setup.kwargs]
+	hosts = [
+		"127.0.0.1"
+	]
+	default_keyspace = "pyuserdb"
+	protocol_version = 3
+

@@ -1,0 +1,15 @@
+# Primary requirements file.
+pyramid
+pyramid_chameleon
+pyramid_mako
+pyramid_debugtoolbar
+waitress
+
+pyramid_oauth2_provider
+
+wtforms
+paginate
+
+gunicorn
+
+pytoml
