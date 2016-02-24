@@ -1,5 +1,5 @@
-gpyramid README
-===============
+gpyramid_admin README
+=====================
 
 Overview
 --------

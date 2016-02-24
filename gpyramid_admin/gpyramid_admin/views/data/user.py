@@ -10,8 +10,8 @@ from cassandra.cqlengine.functions import Token
 
 from pyuserdb.cassandra_.models import User, AuthenticationUser
 
-from gpyramid.utils.paginate import PageURL_WebOb
-import gpyramid.forms.data.user as user_forms
+from gpyramid_admin.utils.paginate import PageURL_WebOb
+import gpyramid_admin.forms.data.user as user_forms
 
 
 ITEMS_PER_PAGE = 10

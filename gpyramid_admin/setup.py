@@ -19,7 +19,7 @@ def read_version(fobj):
 
 HERE = os.path.abspath(os.path.dirname(__file__))
 
-with open(os.path.join(HERE, 'gpyramid', '__init__.py')) as f:
+with open(os.path.join(HERE, 'gpyramid_admin', '__init__.py')) as f:
     module_version = read_version(f)
 
 with open(os.path.join(HERE, 'README.md')) as f:
@@ -32,9 +32,9 @@ with open(os.path.join(HERE, 'requirements.txt')) as f:
     requires = map(str, pkg_resources.parse_requirements(f.read()))
 
 
-setup(name='gpyramid',
+setup(name='gpyramid_admin',
       version=module_version,
-      description='gpyramid',
+      description='gpyramid_admin',
       long_description=README + '\n\n' + CHANGES,
       classifiers=[
         "Programming Language :: Python",
@@ -51,13 +51,13 @@ setup(name='gpyramid',
       zip_safe=False,
       install_requires=requires,
       tests_require=requires,
-      test_suite="gpyramid",
+      test_suite="gpyramid_admin",
       scripts=[
-        'gpyramid/scripts/gpyramid_wsgi',
+        'gpyramid_admin/scripts/gpyramid_admin_wsgi',
       ],
       entry_points={
         'paste.app_factory': [
-            'main = gpyramid.main:main',
+            'main = gpyramid_admin.main:main',
         ],
     },
 )
