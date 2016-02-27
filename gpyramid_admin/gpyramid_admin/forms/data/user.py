@@ -10,6 +10,7 @@ class CreateUserForm(wtforms.Form):
     username = wtforms.StringField(
         'Username', [
             myvalidators.Strip(),
+            myvalidators.Lowercase(),
             wtvalidators.InputRequired(),
         ]
     )
