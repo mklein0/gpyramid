@@ -2,7 +2,7 @@
 import wtforms
 import wtforms.validators as wtvalidators
 
-import gpyramid_admin.forms.validators as myvalidators
+import gpyramid.forms.validators as myvalidators
 
 
 class CreateUserForm(wtforms.Form):
