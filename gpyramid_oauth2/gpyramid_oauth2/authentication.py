@@ -17,7 +17,7 @@ from pyramid_oauth2_provider.errors import InvalidToken, InvalidRequest
 from pyramid_oauth2_provider.util import getClientCredentials
 
 from pyuserdb.cassandra_.models import (
-    OAuth2AccessToken,
+    OAuth2TokenAccess,
 )
 
 
@@ -42,9 +42,9 @@ class OauthAuthenticationPolicy(CallbackAuthenticationPolicy):
 
         cdb_session = request.cdb_session
         try:
-            access_token = OAuth2AccessToken.get(access_token=token)
+            access_token = OAuth2TokenAccess.get(access_token=token)
 
-        except OAuth2AccessToken.DoesNotExist:
+        except OAuth2TokenAccess.DoesNotExist:
             raise HTTPBadRequest(InvalidRequest())
 
         # # Expired or revoked token, return 401 invalid token

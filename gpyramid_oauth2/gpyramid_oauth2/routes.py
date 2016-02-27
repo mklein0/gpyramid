@@ -13,6 +13,7 @@ def add_routes(config):
 
     # OAuth2 End-Points
     config.add_route('oauth2_provider_authorize', 'oauth2/authorize')
+    config.add_route('oauth2_provider_authorize_complete', 'oauth2/authorize/complete')
     config.add_route('oauth2_provider_token', 'oauth2/token')
 
 
