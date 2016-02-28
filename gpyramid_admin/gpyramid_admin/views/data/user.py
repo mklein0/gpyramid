@@ -7,6 +7,8 @@ from pyramid.httpexceptions import HTTPFound, HTTPOk, HTTPNotFound
 
 from paginate import Page
 
+from cassandra.cqlengine.query import LWTException  # , BatchQuery
+
 from pyuserdb.cassandra_.models import User, AuthenticationUser
 
 from gpyramid_admin.utils.paginate import PageURL_WebOb, PageCollection_CassandraCQLEngine
@@ -47,28 +49,99 @@ def user_list(request):
         form = user_forms.CreateUserForm(request.POST)
         if form.validate():
 
-            # TODO: Need to create if does not exist
+            try:
+                auth_user = AuthenticationUser.get(username=form.username.data)
 
-            user = User.create(
-                user_uuid=form.user_uuid.data.lower() or uuid.uuid4(),
-                username=form.username.data.lower(),
-                password=form.password.data,
-                first_name=form.first_name.data or '',
-                last_name=form.last_name.data,
-                display_name=form.display_name.data or u'{0} {1}'.format(
-                    form.first_name.data, form.last_name.data).strip(),
-                email=form.email.data,
-            )
+                # record found, Username is taken, need to mark this as an error.
+                form.error_username_in_use()
 
-            # TODO: Need to check that username not already in use.
-            AuthenticationUser.create(
-                username=user.username,
-                password=user.password,
-                user_uuid=user.user_uuid,
-            )
-            return HTTPFound(
-                location=request.route_path('data.user.list_or_create')
-            )
+            except AuthenticationUser.DoesNotExist:
+                # Good, username not taken yet.
+                user = User(
+                    user_uuid=form.user_uuid.data.lower() or uuid.uuid4(),
+                    username=form.username.data.lower(),
+                    password=form.password.data,
+                    first_name=form.first_name.data or '',
+                    last_name=form.last_name.data,
+                    display_name=form.display_name.data or u'{0} {1}'.format(
+                        form.first_name.data, form.last_name.data).strip(),
+                    email=form.email.data,
+                )
+                auth_user = AuthenticationUser(
+                    username=user.username,
+                    password=user.password,
+                    user_uuid=user.user_uuid,
+                )
+
+                # Need to manually track transaction of record insertion.
+                # TODO: Should force the datacenter in use to be consistent for application inserts.
+                # Validate username first
+                try:
+                    auth_user.if_not_exists(True).save()
+
+                except LWTException:
+                    # Username taken
+                    form.error_username_in_use()
+
+                else:
+                    # Need to determine if we can auto generate a new UUID in case of failure, or need to flag error.
+                    if form.user_uuid.data:
+                        # Specified UUID
+                        try:
+                            user.if_not_exists(True).save()
+
+                            # Records inserted without issue. Good to go.
+                            return HTTPFound(
+                                location=request.route_path('data.user.list_or_create')
+                            )
+
+                        except LWTException:
+                            # Username taken
+                            form.error_user_uuid_in_use()
+
+                            # Need to backout authentication record
+                            auth_user.delete()
+
+                    else:
+                        # Randomly allocated, try X times. Should never happen \u1F91E
+                        for i in xrange(10):
+                            try:
+                                user.if_not_exists(True).save()
+
+                                # Records inserted without issue. update authentication record in case UUID changed.
+                                auth_user.user_uuid = user.user_uuid
+                                auth_user.save()
+
+                                return HTTPFound(
+                                    location=request.route_path('data.user.list_or_create')
+                                )
+
+                            except LWTException:
+                                # UUID conflict, allocate a new one and try again.
+                                user.user_uuid = uuid.uuid4()
+
+                            # Else,
+                            # Username taken
+                            form.user_uuid.data = user.user_uuid
+                            form.error_user_uuid_in_use()
+
+                            # Need to backout authentication record
+                            auth_user.delete()
+
+                # try:
+                #     # Light Weight Transaction across multiple inserts.
+                #     # TODO: Should force the datacenter in use to be consistent for application inserts.
+                #     with BatchQuery() as b:
+                #         user.batch(b).if_not_exists(True).save()
+                #         auth_user.batch(b).if_not_exists(True).save()
+                #
+                #     return HTTPFound(
+                #         location=request.route_path('data.user.list_or_create')
+                #     )
+                #
+                # except LWTException:
+                #     # User UUID or username in use.
+                #     form.error_username_in_use()
 
         # Else, form errors
 

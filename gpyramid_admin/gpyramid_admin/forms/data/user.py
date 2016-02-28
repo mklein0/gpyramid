@@ -61,6 +61,24 @@ class CreateUserForm(wtforms.Form):
         ]
     )
 
+    def error_username_in_use(self):
+        """
+        Mark the form with a username denoting the username is already in use.
+        """
+        self._error = None
+        self.username.process_errors = self.username.errors = [
+            ValueError('Username already in use')
+        ]
+
+    def error_user_uuid_in_use(self):
+        """
+        Mark the form with a username denoting the username is already in use.
+        """
+        self._error = None
+        self.user_uuid.process_errors = self.user_uuid.errors = [
+            ValueError('UUID already in use')
+        ]
+
 
 class EditUserForm(wtforms.Form):
 

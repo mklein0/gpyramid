@@ -7,6 +7,8 @@ from pyramid.httpexceptions import HTTPFound, HTTPOk, HTTPNotFound
 
 from paginate import Page
 
+from cassandra.cqlengine.query import LWTException
+
 from pyuserdb.cassandra_.models import OAuth2Client
 
 from gpyramid_admin.utils.paginate import PageURL_WebOb, PageCollection_CassandraCQLEngine
@@ -48,8 +50,8 @@ def client_list(request):
         form = client_forms.CreateClientForm(request.POST)
         if form.validate():
 
-            # TODO: Need to create if does not exist
-            OAuth2Client.create(
+            # Stage new record, and see if we can create it without issues.
+            new_client = OAuth2Client(
                 name=form.name.data,
                 redirect_uri=form.redirect_uri.data,
                 client_type=form.client_type.data,
@@ -59,9 +61,18 @@ def client_list(request):
                 client_secret=form.client_secret.data or str(uuid.uuid4()),
             )
 
-            return HTTPFound(
-                location=request.route_path('data.client.list_or_create')
-            )
+            try:
+                # Simple Light Weight Transaction for a single record.
+                # TODO: Should force the datacenter in use to be consistent for application inserts.
+                new_client.if_not_exists(True).save()
+
+                return HTTPFound(
+                    location=request.route_path('data.client.list_or_create')
+                )
+
+            except LWTException:
+                # primary key already in use, mark as an error
+                form.error_client_id_in_use()
 
         # Else, form errors
 

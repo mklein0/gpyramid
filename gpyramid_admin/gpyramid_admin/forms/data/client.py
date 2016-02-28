@@ -64,6 +64,15 @@ class CreateClientForm(wtforms.Form):
         ]
     )
 
+    def error_client_id_in_use(self):
+        """
+        Mark the form with a username denoting the username is already in use.
+        """
+        self._error = None
+        self.client_id.process_errors = self.client_id.errors = [
+            ValueError('Username already in use')
+        ]
+
 
 class EditClientForm(wtforms.Form):
 
