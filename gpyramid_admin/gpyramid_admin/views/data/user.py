@@ -1,16 +1,15 @@
 #
 import uuid
+import functools
 
 from pyramid.view import view_config
 from pyramid.httpexceptions import HTTPFound, HTTPOk, HTTPNotFound
 
 from paginate import Page
 
-from cassandra.cqlengine.functions import Token
-
 from pyuserdb.cassandra_.models import User, AuthenticationUser
 
-from gpyramid_admin.utils.paginate import PageURL_WebOb
+from gpyramid_admin.utils.paginate import PageURL_WebOb, PageCollection_CassandraCQLEngine
 import gpyramid_admin.forms.data.user as user_forms
 
 
@@ -76,21 +75,15 @@ def user_list(request):
     else:  # request.method = 'GET'
         form = user_forms.CreateUserForm()
 
-    query = User.objects.all().limit(items_per_page)
-
-    # Page to position for page being requested.
-    page = list(query)
-    if len(page) > 0 and page_num > 1:
-        for i in xrange(page_num - 1):
-            last_item = page[-1]
-            page = list(query.filter(pk__token__gt=Token(last_item.pk)))
-
     # TODO: Paginators like to know maximum limit, not very nice in cassandra.
-    page_url = PageURL_WebOb(request)
+    # TODO: Need to validate page number since paginator does not do a good job.
     paginator = Page(
-        page, page_num,
-        url_maker=page_url,
-        items_per_page=items_per_page)
+        User.objects,
+        page_num,
+        url_maker=PageURL_WebOb(request),
+        items_per_page=items_per_page,
+        wrapper_class=functools.partial(PageCollection_CassandraCQLEngine, items_per_page),
+    )
 
     return {
         'request': request,
