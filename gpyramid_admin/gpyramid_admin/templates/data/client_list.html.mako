@@ -19,7 +19,7 @@ ${paginator.pager() | n}
 	<tr>
 		<th></th>
 		<th>Client ID</th>
-		<th>Client Secret</th>
+		<th>Client Name</th>
 		<th>Email</th>
 		<th>Redirect URI</th>
 	</tr>
@@ -27,7 +27,7 @@ ${paginator.pager() | n}
 	<tr>
 		<td>${pos}.</td>
 		<td><a href="${request.route_path('data.client.view_or_edit', client_id=client.client_id)}">${client.client_id}</a></td>
-		<td>${client.client_secret}</td>
+		<td>${client.name}</td>
 		<td>${client.email}</td>
 		<td>${client.redirect_uri}</td>
 	</tr>
