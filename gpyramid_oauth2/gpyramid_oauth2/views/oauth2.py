@@ -20,8 +20,7 @@ from pyramid_oauth2_provider.errors import (
     InvalidClient,
     InvalidRequest,
     UnsupportedGrantType,
-    BaseOauth2Error,
-    # InvalidGrant,
+    InvalidGrant,
 )
 from pyramid_oauth2_provider.generators import gen_token
 from pyramid_oauth2_provider.interfaces import IAuthCheck
@@ -37,19 +36,6 @@ from pyuserdb.cassandra_.models import (
     OAuth2TokenAccess,
     OAuth2TokenRefresh,
 )
-
-
-class InvalidGrant(BaseOauth2Error):
-    """
-    The provided authorization grant (e.g., authorization
-    code, resource owner credentials) or refresh token is
-    invalid, expired, revoked, does not match the redirection
-    URI used in the authorization request, or was issued to
-    another client.
-
-    https://tools.ietf.org/html/rfc6749#section-5.2
-    """
-    error_name = 'invalid_grant'
 
 
 log = logging.getLogger('gpyramid_oauth2.views')
