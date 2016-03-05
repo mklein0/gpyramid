@@ -464,13 +464,6 @@ def oauth2_token_password(request):
           "user_id":1234,
         }
     """
-
-    # Make sure this is a POST.
-    if request.method != 'POST':
-        log.info('rejected request due to invalid method: %s' % request.method)
-        return HTTPMethodNotAllowed(
-            'This endpoint only supports the POST method.')
-
     getClientCredentials(request)
 
     # Make sure we got a client_id and secret through the authorization
