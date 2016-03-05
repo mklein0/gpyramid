@@ -7,11 +7,11 @@ import logging
 from urllib import urlencode
 from urlparse import urlparse, parse_qsl, ParseResult
 
+from pyramid.view import view_config
 from pyramid.httpexceptions import HTTPFound
 from pyramid.security import (
     NO_PERMISSION_REQUIRED,
 )
-from pyramid.view import view_config
 
 from cassandra.cqlengine.query import LWTException
 
@@ -41,11 +41,12 @@ from pyuserdb.cassandra_.models import (
 log = logging.getLogger('gpyramid_oauth2.views')
 
 
-def handle_base_authorize_request(request):
+def validate_authorize_request(request, redirect_required=False):
     """
     Provide basic validatation of incoming authorize request.
 
     :param pyramid.request.Request request: Incoming Web Request
+    :param bool redirect_required: Flag whether redirect_uri should be present and match.
 
     :return: Validated OAuth2 Client record, redirection URI override if present and valid
     :rtype: pyuserdb.cassandra_.OAuth2Client, str
@@ -63,19 +64,21 @@ def handle_base_authorize_request(request):
         raise HTTPBadRequest(InvalidRequest(
             error_description='Invalid client credentials'))
 
-    import ipdb; ipdb.set_trace()
     redirect_found = False
     redirection_uri = None
     redirect_uri = request.params.get('redirect_uri')
     if client.redirect_uri:
         if not redirect_uri:
-            # No redirect passed, use default one.
-            redirect_found = True
+            # No redirect passed, this is ok if redirect not required.
+            redirect_found = (not redirect_required)
 
+        # redirect passed in request, does it match.
         elif redirect_uri.startswith(client.redirect_uri):
             # Redirect passed, make sure it matches start of the one we have.
             redirection_uri = redirect_uri
             redirect_found = True
+
+    # Else client has no redirect configured and thus will never match anything.
 
     # if len(client.redirect_uris) == 1:
     #     # Only one redirect URI configured for client, given redirect uri is configured URI or starts with
@@ -141,10 +144,10 @@ def oauth2_authorize_code(request):
         Location: https://client.example.com/cb?code=AverTaer&state=efg
 
     """
-    client, redirection_uri = handle_base_authorize_request(request)
+    response_type = request.params['response_type']
+    client, redirection_uri = validate_authorize_request(request)
 
-    state = request.params.get('state')
-    resp = handle_authorize_authcode(request, client, redirection_uri, state)
+    resp = handle_authorize_authcode(request, client, redirection_uri, response_type, request.params.get('state'))
     return resp
 
 
@@ -160,10 +163,10 @@ def oauth2_authorize_implicit(request):
 
     :param pyramid.request.Request request: Incoming Web Request
     """
-    client, redirection_uri = handle_base_authorize_request(request)
+    response_type = request.params['response_type']
+    client, redirection_uri = validate_authorize_request(request, redirect_required=True)
 
-    state = request.params.get('state')
-    resp = handle_authorize_implicit(request, client, redirection_uri, state)
+    resp = handle_authorize_authcode(request, client, redirection_uri, response_type, request.params.get('state'))
     return resp
 
 
@@ -208,13 +211,14 @@ def oauth2_authorize(request):
     return resp
 
 
-def handle_authorize_authcode(request, client, redirection_uri, state=None):
+def handle_authorize_authcode(request, client, redirection_uri, response_type, state=None):
     """
     Setup an authorization code session.
 
     :param pyramid.request.Request request: Incoming Web Request
     :param pyuserdb.cassandra_.models.OAuth2Client client: OAuth2 Client Record
     :param str redirection_uri: redirection URI associated with client
+    :param str response_type: authorization_code or implicit grant authentication
     :param str | None state: optional state string
 
     :return:
@@ -236,6 +240,7 @@ def handle_authorize_authcode(request, client, redirection_uri, state=None):
     authorize_value = OAuth2AuthorizeSession(request, response)
     authorize_value.update(
         client_id=str(client.client_id),
+        response_type=response_type,
         redirect_uri=redirection_uri,
         scope=scope,
         state=state,
@@ -257,6 +262,7 @@ def oauth2_authorize_complete(request):
     """
     try:
         authorize_value = OAuth2AuthorizeSession.load(request)
+        # Assume all keys in dict are present.  If not, that is an internal application error.
 
     except ValueError:
         log.info('authorize complete without cookie')
@@ -286,9 +292,19 @@ def oauth2_authorize_complete(request):
         raise HTTPBadRequest(InvalidRequest(
             error_description='Invalid client credentials'))
 
-    return handle_authorize_complete_authcode(
-        request, client, user_id,
-        authorize_value['redirect_uri'], authorize_value['state'], authorize_value['scope'])
+    if authorize_value['response_type'] == 'token':
+        return handle_authorize_complete_implicit(
+            request, client, user_id,
+            authorize_value['redirect_uri'], authorize_value['state'], authorize_value['scope'])
+
+    elif authorize_value['response_type'] == 'code':
+        return handle_authorize_complete_authcode(
+            request, client, user_id,
+            authorize_value['redirect_uri'], authorize_value['state'], authorize_value['scope'])
+
+    else:
+        # Unknown authorization
+        raise HTTPBadRequest(InvalidRequest(error_description='Oauth2 unknown response_type not supported'))
 
 
 def handle_authorize_complete_authcode(request, client, user_id, redirection_uri, state=None, scope=None):
@@ -325,6 +341,43 @@ def handle_authorize_complete_authcode(request, client, user_id, redirection_uri
         parts.scheme, parts.netloc, parts.path, parts.params,
         urlencode(qparams), '')
     return HTTPFound(location=parts.geturl())
+
+
+def handle_authorize_complete_implicit(request, client, user_id, redirection_uri, state=None, scope=None):
+    """
+    Setup an access token for use by implicit session.
+
+    :param pyramid.request.Request request: Incoming Web Request
+    :param pyuserdb.cassandra_.models.OAuth2Client client: OAuth2 Client Record
+    :param uuid.UUID user_id: UUID for user
+    :param str redirection_uri: redirection URI associated with client
+    :param str | None state: optional state string
+    :param str | None scope: optional/required scope string
+    :param list[str] | None scope: optional scope strings
+
+    :return:
+    """
+    access_token, refresh_token = create_token_set(client, user_id)
+
+    expires_in = int((access_token.valid_until - datetime.datetime.utcnow()).total_seconds())
+
+    fragments = dict(
+        access_token=access_token.access_token,
+        expires_in=expires_in,
+        token_type='bearer',
+    )
+    if scope:
+        fragments['scope'] = scope
+    if state:
+        fragments['state'] = state
+
+    parts = urlparse(redirection_uri)
+    parts = ParseResult(
+        parts.scheme, parts.netloc, parts.path, parts.params, parts.query,
+        '&'.join((parts.fragment or '', urlencode(fragments)))
+    )
+    response = HTTPFound(location=parts.geturl())
+    return response
 
 
 def handle_authorize_implicit(request, client, redirection_uri, state=None):
@@ -381,15 +434,14 @@ def oauth2_token_authorization_code(request):
           "user_id": 1234,
         }
     """
-    # getClientCredentials(request)
-    #
-    # # Make sure we got a client_id and secret through the authorization
-    # # policy. Note that you should only get here if not using the Oauth2
-    # # authorization policy or access was granted through the AuthTKt policy.
-    # if hasattr(request, 'client_id') and request.client_id == request.POST.get('client_id'):
-    #     log.info('did not matching client credentials')
-    #     return HTTPUnauthorized('Invalid client credentials')
-    request.client_id = request.POST.get('client_id')
+    getClientCredentials(request)
+
+    # Make sure we got a client_id and secret through the authorization
+    # policy. Note that you should only get here if not using the Oauth2
+    # authorization policy or access was granted through the AuthTKt policy.
+    if hasattr(request, 'client_id') and request.client_id == request.POST.get('client_id'):
+        log.info('did not matching client credentials')
+        return HTTPUnauthorized('Invalid client credentials')
 
     csdb_session = request.csdb_session
     try:
@@ -604,12 +656,15 @@ def token_as_json(refresh_token, **kwargs):
     return kwargs
 
 
-def create_token_set(client, user_uuid):
+def create_token_set(client, user_uuid, no_refresh_token=False):
     """
 
     :param pyuserdb.cassandra_.models.OAuth2Client client: OAuth2 Client
     :param uuid.UUID user_uuid: User UUID
+    :param bool no_refresh_token: Flag to indicate if a refresh token should be created.
+
     :return:
+    :rtype: OAuth2TokenAccess, OAuth2TokenRefresh | None
     """
     utcnow =  datetime.datetime.utcnow()
     expires_in = 60*60*24*3  # 3 days
@@ -621,6 +676,10 @@ def create_token_set(client, user_uuid):
         client_id=client.client_id,
         valid_until=valid_until,
     )
+    if no_refresh_token:
+        return _create_token_access_only(client, access_token, expires_in), None
+
+    # Else,
     refresh_token = OAuth2TokenRefresh(
         refresh_token=gen_token(client),
         valid_until=(utcnow + datetime.timedelta(seconds=expires_in * 20)),
@@ -630,6 +689,20 @@ def create_token_set(client, user_uuid):
         access_token_valid_until=valid_until,
     )
 
+    return _create_token_set(client, access_token, refresh_token, expires_in)
+
+
+def _create_token_set(client, access_token, refresh_token, expires_in):
+    """
+
+    :param OAuth2Client client:
+    :param OAuth2TokenAccess access_token:
+    :param OAuth2TokenRefresh refresh_token:
+    :param int expires_in:
+
+    :return:
+    :rtype: OAuth2TokenAccess, OAuth2TokenRefresh
+    """
     for i in xrange(10):
         try:
             access_token.if_not_exists(True).ttl(expires_in).save()
@@ -657,6 +730,32 @@ def create_token_set(client, user_uuid):
         raise
 
     return access_token, refresh_token
+
+
+def _create_token_access_only(client, access_token, expires_in):
+    """
+
+    :param OAuth2Client client:
+    :param OAuth2TokenAccess access_token:
+    :param int expires_in:
+
+    :return:
+    :rtype: OAuth2TokenAccess
+    """
+    for i in xrange(10):
+        try:
+            access_token.if_not_exists(True).ttl(expires_in).save()
+            break
+
+        except LWTException:
+            # Invalid Access Token, change ids and try again
+            access_token.access_token = gen_token(client)
+            continue
+
+    else:
+        raise
+
+    return access_token
 
 
 def handle_token_authorization_code(request, client):
