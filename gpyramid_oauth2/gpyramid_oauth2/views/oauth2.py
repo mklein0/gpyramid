@@ -12,6 +12,9 @@ from pyramid.security import (
     NO_PERMISSION_REQUIRED,
 )
 from pyramid.view import view_config
+
+from cassandra.cqlengine.query import LWTException
+
 from pyramid_oauth2_provider.errors import (
     InvalidToken,
     InvalidClient,
@@ -596,19 +599,19 @@ def oauth2_token(request):
     return resp
 
 
-def token_as_json(refresh_token, expires_in, **kwargs):
+def token_as_json(refresh_token, **kwargs):
     """
 
     :param pyuserdb.cassandra_.models.OAuth2TokenRefresh refresh_token: Pending RefreshToken
-    :param int expires_in: Number of seconds until token expires
     :param dict kwargs: Addtional keyword arguments to add to resulting dict.
 
     :return:
     """
+    expires_in = int((refresh_token.access_token_valid_until - datetime.datetime.utcnow()).total_seconds())
+
     token = {
         'access_token': refresh_token.access_token,
         'refresh_token': refresh_token.refresh_token,
-        'user_id': str(refresh_token.user_uuid),
         'expires_in': expires_in,
     }
     kwargs.update(token)
@@ -622,17 +625,50 @@ def create_token_set(client, user_uuid):
     :param uuid.UUID user_uuid: User UUID
     :return:
     """
-    access_token = OAuth2TokenAccess.create(
+    utcnow =  datetime.datetime.utcnow()
+    expires_in = 60*60*24*3  # 3 days
+    valid_until = utcnow + datetime.timedelta(seconds=expires_in)
+
+    access_token = OAuth2TokenAccess(
         access_token=gen_token(client),
         user_uuid=user_uuid,
         client_id=client.client_id,
+        valid_until=valid_until,
     )
-    refresh_token = OAuth2TokenRefresh.create(
+    refresh_token = OAuth2TokenRefresh(
         refresh_token=gen_token(client),
+        valid_until=(utcnow + datetime.timedelta(seconds=expires_in * 20)),
         access_token=access_token.access_token,
         user_uuid=access_token.user_uuid,
         client_id=access_token.client_id,
+        access_token_valid_until=valid_until,
     )
+
+    for i in xrange(10):
+        try:
+            access_token.if_not_exists(True).ttl(expires_in).save()
+            break
+
+        except LWTException:
+            # Invalid Access Token, change ids and try again
+            access_token.access_token = refresh_token.access_token = gen_token(client)
+            continue
+
+    else:
+        raise
+
+    for i in xrange(10):
+        try:
+            refresh_token.if_not_exists(True).ttl(expires_in * 20).save()
+            break
+
+        except LWTException:
+            refresh_token.refresh_token = gen_token(client)
+            continue
+    else:
+        # Could not save refresh token, backout access token.
+        access_token.delete()
+        raise
 
     return access_token, refresh_token
 
@@ -682,8 +718,7 @@ def handle_token_authorization_code(request, client):
     access_token, refresh_token = create_token_set(client, auth_grant.user_uuid)
     auth_grant.delete()
 
-    expires_in = access_token.valid_until
-    return token_as_json(refresh_token, expires_in, token_type='bearer')
+    return token_as_json(refresh_token, token_type='bearer')
 
 
 def handle_token_password(request, client):
@@ -711,8 +746,7 @@ def handle_token_password(request, client):
 
     access_token, refresh_token = create_token_set(client, user_id)
 
-    expires_in = access_token.valid_until
-    return token_as_json(refresh_token, expires_in, token_type='bearer')
+    return token_as_json(refresh_token, token_type='bearer')
 
 
 def handle_token_refresh(request, client):
@@ -725,31 +759,21 @@ def handle_token_refresh(request, client):
     """
     if 'refresh_token' not in request.POST:
         log.info('refresh_token field missing')
-        return HTTPBadRequest(InvalidRequest(error_description='refresh_token '
-            'field required'))
-
-    if 'user_id' not in request.POST:
-        log.info('user_id field missing')
-        return HTTPBadRequest(InvalidRequest(error_description='user_id '
-            'field required'))
+        return HTTPBadRequest(InvalidRequest(error_description='refresh_token field required'))
 
     try:
-        refresh_token = OAuth2TokenRefresh.get(refresh_token=request.POST.get('refresh_token'))
+        refresh_token = request.POST.get('refresh_token')
+        if not refresh_token:
+            raise OAuth2Client.DoesNotExist
+        refresh_token = OAuth2TokenRefresh.get(refresh_token=refresh_token)
 
     except OAuth2Client.DoesNotExist:
         log.info('invalid refresh_token')
-        return HTTPUnauthorized(InvalidToken(error_description='Provided '
-            'refresh_token is not valid.'))
+        return HTTPUnauthorized(InvalidToken(error_description='Provided refresh_token is not valid.'))
 
     if refresh_token.client_id != client.client_id:
         log.info('invalid client_id')
-        return HTTPBadRequest(InvalidClient(error_description='Client does '
-            'not own this refresh_token.'))
-
-    if refresh_token.user_uuid != request.POST.get('user_id'):
-        log.info('invalid user_id')
-        return HTTPBadRequest(InvalidClient(error_description='The given '
-            'user_id does not match the given refresh_token.'))
+        return HTTPBadRequest(InvalidClient(error_description='Client does not own this refresh_token.'))
 
     # Refresh Token valid, revoke old token, create new one.
     try:
@@ -759,7 +783,8 @@ def handle_token_refresh(request, client):
         pass
 
     new_access_token, new_refresh_token = create_token_set(client, refresh_token.user_uuid)
+
+    # Revoke old refresh token now
     refresh_token.delete()
 
-    expires_in = new_access_token.valid_until
-    return token_as_json(new_refresh_token, expires_in, token_type='bearer')
+    return token_as_json(new_refresh_token, token_type='bearer')
