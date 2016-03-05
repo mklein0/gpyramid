@@ -16,11 +16,6 @@ def add_routes(config):
     config.add_route('data.client.view_or_edit', 'data/clients/{client_id:[0-9a-f\-]+}/')
 
 
-    # OAuth2 End-Points
-    config.add_route('oauth2.authorize', 'oauth2/authorize/')
-    config.add_route('oauth2.token', 'oauth2/token/')
-
-
 def includeme(config):
     """
     :param pyramid.config.Configurator config: Pyramid App Config
