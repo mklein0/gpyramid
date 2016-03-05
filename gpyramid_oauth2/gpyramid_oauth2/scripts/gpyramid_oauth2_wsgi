@@ -24,4 +24,5 @@ def get_wsgi_app(ini_filename='development.ini', app_name='main'):
     return paster.get_app(ini_realpath, app_name)
 
 
-application = get_wsgi_app()
+if __name__ == '__main__':
+    application = get_wsgi_app()
