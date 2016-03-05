@@ -46,7 +46,7 @@ class OAuth2AuthorizeSession(dict):
     def _load(self):
         authorize_value = self.request.cookies.get(self.AUTHORIZE_SESSION_COOKIE_NAME)
         if authorize_value is None:
-            raise ValueError('Cookie Not Found')
+            raise ValueError('Cookie Not Found')  # pragma: no cover
 
         authorize_value = json.loads(base64.b64decode(authorize_value))
         self.update(authorize_value)
