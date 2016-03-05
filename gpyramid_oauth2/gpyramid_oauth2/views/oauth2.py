@@ -26,7 +26,7 @@ from pyramid_oauth2_provider.jsonerrors import HTTPBadRequest, HTTPUnauthorized,
 from pyramid_oauth2_provider.util import getClientCredentials
 from pyramid_oauth2_provider.views import require_https, add_cache_headers
 
-from gpyramid_oauth2.views.util import save_session, load_session
+from gpyramid_oauth2.views.util import OAuth2AuthorizeSession
 from pyuserdb.cassandra_.models import (
     User,
     OAuth2Client,
@@ -239,19 +239,21 @@ def handle_authorize_authcode(request, client, redirection_uri, state=None):
 
     # Setup temporary state for login
     # TODO: This could be a sparser dict
-    authorize_value = {
-        'client_id': str(client.client_id),
-        'redirect_uri': redirection_uri,
-        'scope': scope,
-        'state': state,
-    }
-
     # TODO: Consider using pyramid session manager and other modules.
     # For now lets manage things via cookies.
     response = HTTPFound(
         location=request.route_path('login.page', _scheme=request.scheme)
     )
-    return save_session(request, response, authorize_value)
+    authorize_value = OAuth2AuthorizeSession(request, response)
+    authorize_value.update(
+        client_id=str(client.client_id),
+        redirect_uri=redirection_uri,
+        scope=scope,
+        state=state,
+    )
+    authorize_value.save()
+
+    return response
 
 
 @view_config(
@@ -265,7 +267,7 @@ def oauth2_authorize_complete(request):
     :param pyramid.request.Request request: Incoming Web Request
     """
     try:
-        authorize_value = load_session(request)
+        authorize_value = OAuth2AuthorizeSession.load(request)
 
     except ValueError:
         log.info('authorize complete without cookie')

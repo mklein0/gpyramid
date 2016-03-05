@@ -6,7 +6,7 @@ from pyramid_oauth2_provider.interfaces import IAuthCheck
 from pyramid_oauth2_provider.views import require_https
 
 from gpyramid_oauth2.forms import login as login_forms
-from gpyramid_oauth2.views.util import save_session, load_session
+from gpyramid_oauth2.views.util import OAuth2AuthorizeSession
 
 
 @view_config(
@@ -28,12 +28,15 @@ def login_page(request):
             auth_check = request.registry.queryUtility(IAuthCheck)
             user_uuid = auth_check().checkauth(form.username.data, form.password.data)
             if user_uuid:
-                authorize_value = load_session(request)
-                authorize_value['user_uuid'] = str(user_uuid)
+                authorize_value = OAuth2AuthorizeSession.load(request)
+                authorize_value.set_user_id(str(user_uuid))
 
                 response = HTTPFound(
                     location=request.route_path('oauth2_provider_authorize_complete', _scheme=request.scheme))
-                save_session(request, response, authorize_value)
+
+                authorize_value.set_response(response)
+                authorize_value.save()
+
                 return response
 
             else:
